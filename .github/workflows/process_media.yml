@@ -1,0 +1,150 @@
+name: Process Uploaded Media
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'uploads/**'
+
+jobs:
+  process_media:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v3
+        with:
+          python-version: '3.x'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install google-generativeai
+          sudo apt-get update && sudo apt-get install -y ffmpeg imagemagick
+
+      - name: Create output directories
+        run: |
+          mkdir -p processed_media/images
+          mkdir -p processed_media/videos
+          mkdir -p processed_flags
+
+      - name: Process new media files
+        id: process_files
+        run: |
+          echo "::group::Processing Files"
+          # Ensure the uploads directory exists
+          if [ ! -d "uploads" ]; then
+            echo "Uploads directory not found. Skipping."
+            echo "::endgroup::"
+            exit 0
+          fi
+
+          # Find all files in the uploads directory
+          # We use a loop to process one file at a time to better manage logs and potential errors.
+          find uploads -type f | while read file; do
+            echo "Processing $file"
+            file_hash=$(md5sum "$file" | awk '{ print $1 }')
+            echo "File hash: $file_hash"
+            flag_file="processed_flags/$file_hash"
+
+            if [ -f "$flag_file" ]; then
+              echo "File $file (hash: $file_hash) already processed. Skipping."
+              continue
+            fi
+
+            # Further steps for calling Gemini, processing, and creating flags will go here.
+            echo "Proceeding with processing for $file (hash: $file_hash)"
+
+            echo "Getting description from Gemini API for $file..."
+            # Make the script executable
+            chmod +x .github/scripts/get_gemini_description.py
+            gemini_description=$(python .github/scripts/get_gemini_description.py "${{ secrets.GEMINI_API_KEY }}" "$file")
+
+            if [[ "$gemini_description" == error* ]]; then
+              echo "Error getting description from Gemini: $gemini_description. Using generic name."
+              base_name="generic-media-${file_hash:0:8}" # Use part of hash for uniqueness
+            else
+              echo "Gemini description: $gemini_description"
+              base_name="$gemini_description"
+            fi
+
+            # Placeholder for actual file processing (image/video conversion) using $base_name
+            echo "Base name for output files: $base_name"
+
+            file_extension="${file##*.}"
+            file_extension_lower=$(echo "$file_extension" | tr '[:upper:]' '[:lower:]')
+
+            # Image Processing
+            if [[ "$file_extension_lower" == "jpg" || "$file_extension_lower" == "jpeg" || "$file_extension_lower" == "png" || "$file_extension_lower" == "gif" || "$file_extension_lower" == "webp" ]]; then
+              echo "Processing image $file..."
+              # Define target widths
+              widths=(1920 1280 640)
+              for width in "${widths[@]}"; do
+                # JPEG
+                output_jpg="processed_media/images/${base_name}-${width}w.jpg"
+                echo "Converting to JPEG ${width}w: $output_jpg"
+                convert "$file" -resize "${width}x>" -quality 85 "$output_jpg"
+
+                # WebP
+                output_webp="processed_media/images/${base_name}-${width}w.webp"
+                echo "Converting to WebP ${width}w: $output_webp"
+                convert "$file" -resize "${width}x>" -quality 80 "$output_webp"
+              done
+              echo "Image processing complete for $file."
+            # Video Processing
+            elif [[ "$file_extension_lower" == "mp4" || "$file_extension_lower" == "mov" || "$file_extension_lower" == "avi" || "$file_extension_lower" == "mkv" || "$file_extension_lower" == "webm" || "$file_extension_lower" == "flv" ]]; then
+              echo "Processing video $file..."
+              # Define target heights (common for 1080p, 720p)
+              heights=(1080 720)
+
+              for height in "${heights[@]}"; do
+                # MP4 (H.264)
+                output_mp4="processed_media/videos/${base_name}-${height}p.mp4"
+                echo "Converting to MP4 ${height}p: $output_mp4"
+                # Scale if video height is greater than target height. -2 ensures width is even.
+                ffmpeg -i "$file" -vf "scale=-2:min(ih\,${height})" -c:v libx264 -preset medium -crf 23 -c:a aac -b:a 128k -movflags +faststart "$output_mp4" -y
+
+                # WebM (VP9)
+                output_webm="processed_media/videos/${base_name}-${height}p.webm"
+                echo "Converting to WebM ${height}p: $output_webm"
+                ffmpeg -i "$file" -vf "scale=-2:min(ih\,${height})" -c:v libvpx-vp9 -crf 30 -b:v 0 -c:a libopus -b:a 128k "$output_webm" -y
+              done
+              echo "Video processing complete for $file."
+            else
+              echo "File $file is not a recognized image or video type. Skipping processing."
+            fi
+
+            # After successful processing of all formats for a given file type, create the flag file.
+            processed_successfully=false
+            if [[ "$file_extension_lower" == "jpg" || "$file_extension_lower" == "jpeg" || "$file_extension_lower" == "png" || "$file_extension_lower" == "gif" || "$file_extension_lower" == "webp" ]]; then
+              # Basic check: assume success if we got here for images.
+              # A more robust check would verify output files exist and are not empty.
+              processed_successfully=true
+            elif [[ "$file_extension_lower" == "mp4" || "$file_extension_lower" == "mov" || "$file_extension_lower" == "avi" || "$file_extension_lower" == "mkv" || "$file_extension_lower" == "webm" || "$file_extension_lower" == "flv" ]]; then
+              # Basic check for videos
+              processed_successfully=true
+            fi
+
+            if [ "$processed_successfully" = true ]; then
+                touch "$flag_file"
+                echo "Created flag file $flag_file for $file"
+            else
+                echo "Skipping flag file creation for $file as it was not processed."
+            fi
+
+          done
+          echo "::endgroup::"
+
+      - name: Commit processed files
+        run: |
+          git config --global user.name 'github-actions[bot]'
+          git config --global user.email 'github-actions[bot]@users.noreply.github.com'
+          git add processed_media/* processed_flags/*
+          # Only commit if there are changes
+          git diff --staged --quiet || git commit -m "Process media files and add descriptions"
+          git push
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
