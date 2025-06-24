@@ -39,7 +39,7 @@ jobs:
           mkdir -p processed_media/videos
           mkdir -p processed_media/descriptions # For .md files
           mkdir -p processed_media/html # For .html files
-          mkdir -p processed_flags
+          # mkdir -p processed_flags # No longer needed
 
       - name: Process new media files
         id: process_files
@@ -116,7 +116,12 @@ jobs:
           add_files_if_present "processed_media/videos" "*"
           add_files_if_present "processed_media/descriptions" "*.md"
           add_files_if_present "processed_media/html" "*.html"
-          add_files_if_present "processed_flags" "*"
+          # add_files_if_present "processed_flags" "*" # No longer needed
+
+          # Add index.json if it exists and has changes
+          if [ -f "index.json" ]; then
+            git add index.json
+          fi
 
           # Only commit if there are changes staged
           if ! git diff --staged --quiet; then
