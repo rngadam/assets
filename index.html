@@ -32,6 +32,18 @@
     </div>
 
     <script>
+        function escapeHTML(unsafe) {
+            if (unsafe === null || typeof unsafe === 'undefined') {
+                return '';
+            }
+            return unsafe
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;")
+                .replace(/'/g, "&#039;");
+        }
+
         async function fetchIndexAndDisplay() {
             const catalogDiv = document.getElementById('catalog');
             try {
@@ -85,7 +97,7 @@
                             <picture>
                                 ${webpSources ? `<source srcset="${webpSources}" type="image/webp">` : ''}
                                 ${jpgSources ? `<source srcset="${jpgSources}" type="image/jpeg">` : ''}
-                                ${fallbackSrc ? `<img src="${fallbackSrc}" alt="${asset.base_name || 'Processed Image'}">` : '<p>Image not available</p>'}
+                                ${fallbackSrc ? `<img src="${fallbackSrc}" alt="${escapeHTML(asset.base_name || 'Processed Image')}">` : '<p>Image not available</p>'}
                             </picture>
                         `;
                     } else if (asset.outputs.type === 'video') {
@@ -102,38 +114,23 @@
 
                     let descriptionRenderedHtml = '<p>No description available.</p>';
                     if (asset.description_markdown_path) {
-                        // Fetch markdown content - this is a simplified approach
-                        // In a real app, you might pre-fetch or handle errors more gracefully
-                        fetch(`${rawPrefix}${asset.description_markdown_path}?t=${new Date().getTime()}`)
-                            .then(res => res.text())
-                            .then(md => {
-                                if (md && !md.startsWith("<!DOCTYPE html>")) { // Basic check if content is markdown
-                                   assetDiv.querySelector('.description').innerHTML = marked.parse(md);
-                                } else {
-                                   assetDiv.querySelector('.description').innerHTML = '<p>Could not load description.</p>';
-                                }
-                            })
-                            .catch(err => {
-                                console.error('Error fetching markdown:', err);
-                                assetDiv.querySelector('.description').innerHTML = '<p>Error loading description.</p>';
-                            });
-                        descriptionRenderedHtml = '<div class="description-loading">Loading description...</div>'; // Placeholder
+                        // Placeholder for description, will be filled by the fetch call after assetDiv is in DOM
+                        descriptionRenderedHtml = '<div class="description-loading">Loading description...</div>';
                     }
 
-
                     assetDiv.innerHTML = `
-                        <h2>${asset.base_name || 'Untitled Asset'}</h2>
+                        <h2>${escapeHTML(asset.base_name || 'Untitled Asset')}</h2>
                         ${mediaHTML}
                         <div class="description">
                             ${descriptionRenderedHtml}
                         </div>
                         <div class="asset-details">
-                            <p><strong>Source File:</strong> ${asset.source_file_path}</p>
-                            <p><strong>Source Hash:</strong> ${asset.source_hash}</p>
-                            ${asset.outputs.html_page_path ? `<p><strong>HTML Page:</strong> <a href="${rawPrefix}${asset.outputs.html_page_path}" target="_blank">${asset.outputs.html_page_path.replace('processed_media/', '')}</a></p>` : ''}
+                            <p><strong>Source File:</strong> ${escapeHTML(asset.source_file_path)}</p>
+                            <p><strong>Source Hash:</strong> ${escapeHTML(asset.source_hash)}</p>
+                            ${asset.outputs.html_page_path ? `<p><strong>HTML Page:</strong> <a href="${rawPrefix}${asset.outputs.html_page_path}" target="_blank">${escapeHTML(asset.outputs.html_page_path.replace('processed_media/', ''))}</a></p>` : ''}
                             <p><strong>Processed Steps:</strong></p>
                             <ul>
-                                ${asset.processed_steps && asset.processed_steps.length > 0 ? asset.processed_steps.map(step => `<li>${step}</li>`).join('') : '<li>None</li>'}
+                                ${asset.processed_steps && asset.processed_steps.length > 0 ? asset.processed_steps.map(step => `<li>${escapeHTML(step)}</li>`).join('') : '<li>None</li>'}
                             </ul>
                         </div>
                     `;

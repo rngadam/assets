@@ -426,7 +426,7 @@ def main():
                     if (output_mp4_abs_path.parent / f"{output_mp4_abs_path.name}_original").exists():
                         (output_mp4_abs_path.parent / f"{output_mp4_abs_path.name}_original").unlink()
                     current_asset_data["outputs"]["video_files"].append({
-                        "format": "mp4", "height": height, "path": str(BASE_OUTPUT_DIR.name / VIDEO_DIR.name / mp4_filename) # Relative to repo root
+                        "format": "mp4", "height": height, "path": str(Path(VIDEO_DIR.name) / mp4_filename) # Relative to BASE_OUTPUT_DIR
                     })
 
                     # WebM (VP9)
@@ -447,7 +447,7 @@ def main():
                     if (output_webm_abs_path.parent / f"{output_webm_abs_path.name}_original").exists():
                         (output_webm_abs_path.parent / f"{output_webm_abs_path.name}_original").unlink()
                     current_asset_data["outputs"]["video_files"].append({
-                        "format": "webm", "height": height, "path": str(BASE_OUTPUT_DIR.name / VIDEO_DIR.name / webm_filename) # Relative to repo root
+                        "format": "webm", "height": height, "path": str(Path(VIDEO_DIR.name) / webm_filename) # Relative to BASE_OUTPUT_DIR
                     })
                     log_message(f"Successfully converted video to {height}p (MP4/WebM) for {current_base_name}")
 
