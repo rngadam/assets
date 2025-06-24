@@ -2,11 +2,11 @@ name: Process Uploaded Media
 
 on:
   push:
-    branches:
-      - main
     paths:
       - 'uploads/**'
-
+      - .github/workflows/process_media.yml
+  workflow_dispatch:
+  
 jobs:
   process_media:
     runs-on: ubuntu-latest
