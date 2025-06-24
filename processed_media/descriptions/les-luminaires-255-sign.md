@@ -1,0 +1,3 @@
+Here's a caption/alt text description for the image:
+
+A close-up view of a teal-green signpost with an oval sign reading "Les Luminaires 255 1 à 13" in gold lettering. The sign is mounted on dark green wooden posts, and sits in front of lush green landscaping including hostas and a large, grey boulder.  In the background is a residential building with a brown roof and light-colored siding, partially obscured by trees.  The scene is outdoors on a bright, sunny day. The overall aesthetic is clean, and somewhat formal.
