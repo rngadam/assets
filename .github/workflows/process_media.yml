@@ -52,166 +52,45 @@ jobs:
             exit 0
           fi
 
+          # Make Python scripts executable (idempotent)
+          # The process_file.py script itself calls get_gemini_description.py, so only process_file.py needs to be executable by the workflow directly.
+          # The get_gemini_description.py will be called by python interpreter via process_file.py
+          chmod +x .github/scripts/process_file.py
+
           # Find all files in the uploads directory
           # We use a loop to process one file at a time to better manage logs and potential errors.
           find uploads -type f | while read file; do
-            echo "Processing $file"
+            echo "--------------------------------------------------"
+            echo "Processing file in workflow: $file"
             file_hash=$(md5sum "$file" | awk '{ print $1 }')
             echo "File hash: $file_hash"
-            flag_file="processed_flags/$file_hash"
 
-            if [ -f "$flag_file" ]; then
-              echo "File $file (hash: $file_hash) already processed. Skipping."
-              continue
-            fi
+            # Determine the target ref for raw URLs.
+            # Default to 'refs/heads/main' as per previous requirement.
+            # This could be made more dynamic, e.g., use GITHUB_REF_NAME if it's 'main', otherwise GITHUB_SHA.
+            # For now, keeping it simple as 'refs/heads/main'.
+            target_ref_for_raw_url="refs/heads/main"
+            echo "Target ref for raw URLs: $target_ref_for_raw_url"
+            echo "GitHub Repository: ${{ github.repository }}"
+            echo "Calling Python script: .github/scripts/process_file.py"
 
-            # Further steps for calling Gemini, processing, and creating flags will go here.
-            echo "Proceeding with processing for $file (hash: $file_hash)"
+            python .github/scripts/process_file.py \
+              --input-file "$file" \
+              --file-hash "$file_hash" \
+              --gemini-api-key "${{ secrets.GEMINI_API_KEY }}" \
+              --github-repository "${{ github.repository }}" \
+              --github-ref-for-raw-url "$target_ref_for_raw_url"
 
-            echo "Getting description from Gemini API for $file..."
-            # Make the script executable
-            chmod +x .github/scripts/get_gemini_description.py
-            # The script now needs an output directory for the .md file
-            description_md_dir="processed_media/descriptions"
-            html_output_dir="processed_media/html" # Define for later use in HTML generation
-
-            gemini_output=$(python .github/scripts/get_gemini_description.py "${{ secrets.GEMINI_API_KEY }}" "$file" "$description_md_dir")
-
-            if [[ "$gemini_output" == error* ]]; then
-              echo "Error getting description from Gemini: $gemini_output. Using generic name."
-              base_name="generic-media-${file_hash:0:8}" # Use part of hash for uniqueness
-              # Attempt to read a potentially created error .md file for alt text later, or use a generic one
-              full_description_content=$(cat "${description_md_dir}/${base_name}.md" 2>/dev/null || echo "Media file")
+            exit_code=$?
+            if [ $exit_code -ne 0 ]; then
+              echo "::error file=$file,title=Processing Error::Python script process_file.py exited with code $exit_code for file $file."
+              # Optionally, decide if the whole workflow should fail:
+              # exit 1
             else
-              echo "Gemini base name: $gemini_output"
-              base_name="$gemini_output"
-              # Read the full description from the .md file for alt text and HTML generation
-              full_description_content=$(cat "${description_md_dir}/${base_name}.md" 2>/dev/null || echo "Media file")
-
+              echo "Python script process_file.py completed successfully for $file."
             fi
-
-            echo "Base name for output files: $base_name"
-            echo "Full description for alt tags/HTML: $full_description_content"
-
-
-            file_extension="${file##*.}"
-            file_extension_lower=$(echo "$file_extension" | tr '[:upper:]' '[:lower:]')
-
-            # Image Processing
-            if [[ "$file_extension_lower" == "jpg" || "$file_extension_lower" == "jpeg" || "$file_extension_lower" == "png" || "$file_extension_lower" == "gif" || "$file_extension_lower" == "webp" ]]; then
-              echo "Processing image $file..."
-              # Define target widths
-              widths=(1920 1280 640)
-              # Path for HTML file
-              output_html_file="${html_output_dir}/${base_name}.html"
-
-              # Start HTML content
-              html_content="<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n  <meta charset=\"UTF-8\">\n  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n  <title>${base_name}</title>\n</head>\n<body>\n  <h1>${base_name}</h1>\n  <figure>\n    <picture>\n"
-
-              for width in "${widths[@]}"; do
-                # JPEG
-                output_jpg_rel_path="images/${base_name}-${width}w.jpg" # Relative path for HTML
-                output_jpg_abs_path="processed_media/${output_jpg_rel_path}" # Absolute path for processing
-                echo "Converting to JPEG ${width}w: $output_jpg_abs_path"
-                convert "$file" -resize "${width}x>" -quality 85 "$output_jpg_abs_path"
-                echo "Copying metadata to $output_jpg_abs_path"
-                exiftool -tagsFromFile "$file" -all:all -overwrite_original "$output_jpg_abs_path" || echo "Warning: exiftool failed for $output_jpg_abs_path"
-                rm -f "${output_jpg_abs_path}_original"
-
-                # WebP
-                output_webp_rel_path="images/${base_name}-${width}w.webp" # Relative path for HTML
-                output_webp_abs_path="processed_media/${output_webp_rel_path}" # Absolute path for processing
-                echo "Converting to WebP ${width}w: $output_webp_abs_path"
-                convert "$file" -resize "${width}x>" -quality 80 "$output_webp_abs_path"
-                echo "Copying metadata to $output_webp_abs_path"
-                exiftool -tagsFromFile "$file" -all:all -overwrite_original "$output_webp_abs_path" || echo "Warning: exiftool failed for $output_webp_abs_path"
-                rm -f "${output_webp_abs_path}_original"
-
-                # Add sources to HTML content, smallest width first for correctness (though browser picks best)
-                # For the <source media> attribute, we'll use max-width for larger images
-                # This means sources should be listed from largest to smallest if using min-width,
-                # or smallest to largest if using max-width for the media query.
-                # Let's use a more standard approach: list WebP first, then JPEG, for each size, or group by size.
-                # A common pattern is to offer WebP then JPG for each size, or all WebP then all JPG.
-                # For responsive images with <picture> and <source srcset>, it's often:
-                # <source type="image/webp" srcset="elva-fairy-480w.webp 480w, elva-fairy-800w.webp 800w">
-                # <source type="image/jpeg" srcset="elva-fairy-480w.jpg 480w, elva-fairy-800w.jpg 800w">
-                # <img src="elva-fairy-800w.jpg" alt="Elva dressed as a fairy">
-                # The current loop is per width, so we'll build up srcset attributes.
-              done
-
-              # Construct srcset attributes
-              webp_srcset=""
-              jpeg_srcset=""
-              for i in ${!widths[@]}; do
-                width_val=${widths[$i]}
-                webp_srcset+="images/${base_name}-${width_val}w.webp ${width_val}w"
-                jpeg_srcset+="images/${base_name}-${width_val}w.jpg ${width_val}w"
-                if [ $i -lt $((${#widths[@]}-1)) ]; then
-                  webp_srcset+=", "
-                  jpeg_srcset+=", "
-                fi
-              done
-
-              html_content+="      <source type=\"image/webp\" srcset=\"${webp_srcset}\">\n"
-              html_content+="      <source type=\"image/jpeg\" srcset=\"${jpeg_srcset}\">\n"
-              # Fallback img: use the smallest JPEG as src, or largest as per common practice
-              # Using the smallest (640w) as a default src to load quickly.
-              fallback_img_src="images/${base_name}-640w.jpg"
-              # Escape quotes in full_description_content for the alt attribute
-              escaped_alt_text=$(echo "$full_description_content" | sed 's/"/\&quot;/g')
-              html_content+="      <img src=\"${fallback_img_src}\" alt=\"${escaped_alt_text}\" style=\"max-width:100%; height:auto;\">\n"
-              html_content+="    </picture>\n  </figure>\n</body>\n</html>"
-
-              echo -e "$html_content" > "$output_html_file"
-              echo "Generated HTML file: $output_html_file"
-              echo "Image processing complete for $file."
-
-            # Video Processing
-            elif [[ "$file_extension_lower" == "mp4" || "$file_extension_lower" == "mov" || "$file_extension_lower" == "avi" || "$file_extension_lower" == "mkv" || "$file_extension_lower" == "webm" || "$file_extension_lower" == "flv" ]]; then
-              echo "Processing video $file..."
-              # Define target heights (common for 1080p, 720p)
-              heights=(1080 720)
-
-              for height in "${heights[@]}"; do
-                # MP4 (H.264)
-                output_mp4="processed_media/videos/${base_name}-${height}p.mp4"
-                echo "Converting to MP4 ${height}p: $output_mp4"
-                ffmpeg -i "$file" -vf "scale=-2:min(ih\,${height})" -c:v libx264 -preset medium -crf 23 -c:a aac -b:a 128k -movflags +faststart "$output_mp4" -y
-                echo "Copying metadata to $output_mp4"
-                exiftool -tagsFromFile "$file" -all:all -overwrite_original "$output_mp4" || echo "Warning: exiftool failed for $output_mp4"
-                rm -f "${output_mp4}_original"
-
-                # WebM (VP9)
-                output_webm="processed_media/videos/${base_name}-${height}p.webm"
-                echo "Converting to WebM ${height}p: $output_webm"
-                ffmpeg -i "$file" -vf "scale=-2:min(ih\,${height})" -c:v libvpx-vp9 -crf 30 -b:v 0 -c:a libopus -b:a 128k "$output_webm" -y
-                echo "Copying metadata to $output_webm"
-                exiftool -tagsFromFile "$file" -all:all -overwrite_original "$output_webm" || echo "Warning: exiftool failed for $output_webm"
-                rm -f "${output_webm}_original"
-              done
-              echo "Video processing complete for $file."
-            else
-              echo "File $file is not a recognized image or video type. Skipping processing."
-            fi
-
-            # After successful processing of all formats for a given file type, create the flag file.
-            processed_successfully=false
-            if [[ "$file_extension_lower" == "jpg" || "$file_extension_lower" == "jpeg" || "$file_extension_lower" == "png" || "$file_extension_lower" == "gif" || "$file_extension_lower" == "webp" ]]; then
-              # Basic check: assume success if we got here for images.
-              processed_successfully=true
-            elif [[ "$file_extension_lower" == "mp4" || "$file_extension_lower" == "mov" || "$file_extension_lower" == "avi" || "$file_extension_lower" == "mkv" || "$file_extension_lower" == "webm" || "$file_extension_lower" == "flv" ]]; then
-              # Basic check for videos
-              processed_successfully=true
-            fi
-
-            if [ "$processed_successfully" = true ]; then
-                touch "$flag_file"
-                echo "Created flag file $flag_file for $file"
-            else
-                echo "Skipping flag file creation for $file as it was not processed."
-            fi
-
+            echo "Finished workflow processing for $file."
+            echo "--------------------------------------------------"
           done
           echo "::endgroup::"
 
