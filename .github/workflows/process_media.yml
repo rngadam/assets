@@ -136,9 +136,14 @@ jobs:
           if ! git diff --staged --quiet; then
             echo "Committing changes..."
             git commit -m "Process media files, add descriptions, and preserve metadata"
-            # Push to the current branch, whether it's a PR branch or a direct push
-            # GITHUB_HEAD_REF is the source branch in a PR, GITHUB_REF_NAME is the branch/tag name for push events
+
             TARGET_BRANCH="${{ github.head_ref || github.ref_name }}"
+            # Attempt to pull and rebase before pushing to avoid (fetch first) errors
+            echo "Pulling latest changes with rebase from origin $TARGET_BRANCH..."
+            # Allow the pull to fail if the branch doesn't exist remotely yet (e.g. first push to a new PR branch by the action)
+            # Or if there are complex conflicts, though bot changes should be fairly isolated.
+            git pull origin "$TARGET_BRANCH" --rebase || echo "Pull/rebase failed, proceeding with push attempt."
+
             echo "Pushing changes to origin HEAD:$TARGET_BRANCH"
             git push origin HEAD:"$TARGET_BRANCH"
           else
