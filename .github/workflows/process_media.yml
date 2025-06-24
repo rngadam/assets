@@ -137,15 +137,17 @@ jobs:
             echo "Committing changes..."
             git commit -m "Process media files, add descriptions, and preserve metadata"
 
-            TARGET_BRANCH="${{ github.head_ref || github.ref_name }}"
-            # Attempt to pull and rebase before pushing to avoid (fetch first) errors
-            echo "Pulling latest changes with rebase from origin $TARGET_BRANCH..."
-            # Allow the pull to fail if the branch doesn't exist remotely yet (e.g. first push to a new PR branch by the action)
-            # Or if there are complex conflicts, though bot changes should be fairly isolated.
-            git pull origin "$TARGET_BRANCH" --rebase || echo "Pull/rebase failed, proceeding with push attempt."
+            CURRENT_BRANCH_NAME="${{ github.head_ref || github.ref_name }}"
 
-            echo "Pushing changes to origin HEAD:$TARGET_BRANCH"
-            git push origin HEAD:"$TARGET_BRANCH"
+            echo "Fetching origin..."
+            git fetch origin
+
+            echo "Rebasing local commit onto origin/$CURRENT_BRANCH_NAME..."
+            # If rebase fails (e.g. conflicts), the workflow will stop here.
+            git rebase "origin/$CURRENT_BRANCH_NAME"
+
+            echo "Pushing changes to origin HEAD:$CURRENT_BRANCH_NAME"
+            git push origin HEAD:"$CURRENT_BRANCH_NAME"
           else
             echo "No changes to commit."
           fi
