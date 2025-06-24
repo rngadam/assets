@@ -386,7 +386,7 @@ def main():
                     with open(output_html_file_abs, "w", encoding="utf-8") as f_html:
                         f_html.write(html_content)
                     log_message(f"Generated HTML file: {output_html_file_abs}")
-                    current_asset_data["outputs"]["html_page_path"] = str(BASE_OUTPUT_DIR.name / HTML_DIR.name / html_filename) # Store relative to repo root
+                    current_asset_data["outputs"]["html_page_path"] = str(Path(BASE_OUTPUT_DIR.name) / HTML_DIR.name / html_filename) # Store relative to repo root
                     processed_steps.add(STEP_HTML_GENERATION)
                     current_asset_data["processed_steps"] = sorted(list(processed_steps))
                 except FileNotFoundError:
