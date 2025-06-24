@@ -136,7 +136,11 @@ jobs:
           if ! git diff --staged --quiet; then
             echo "Committing changes..."
             git commit -m "Process media files, add descriptions, and preserve metadata"
-            git push
+            # Push to the current branch, whether it's a PR branch or a direct push
+            # GITHUB_HEAD_REF is the source branch in a PR, GITHUB_REF_NAME is the branch/tag name for push events
+            TARGET_BRANCH="${{ github.head_ref || github.ref_name }}"
+            echo "Pushing changes to origin HEAD:$TARGET_BRANCH"
+            git push origin HEAD:"$TARGET_BRANCH"
           else
             echo "No changes to commit."
           fi
