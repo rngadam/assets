@@ -33,7 +33,7 @@ def get_description(api_key, file_path):
         print(f"File URI: {sample_file.uri}")
 
 
-        model = genai.GenerativeModel(model_name="gemini-pro-vision")
+        model = genai.GenerativeModel(model_name="gemini-1.5-flash")
         prompt = "Provide a concise, descriptive filename (5-10 words) for this media, suitable for use as a base for a web filename. Focus on the main subject and action."
 
         print("Generating content with Gemini Pro Vision...")
