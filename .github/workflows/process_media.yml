@@ -1,12 +1,16 @@
 name: Process Uploaded Media
 
 on:
+  workflow_dispatch: # Allows manual triggering
+
   push:
+    branches:
+      - '*' # Run on pushes to any branch
     paths:
       - 'uploads/**'
-      - .github/workflows/process_media.yml
-  workflow_dispatch:
-  
+      - '.github/workflows/process_media.yml'
+      - '.github/scripts/get_gemini_description.py'
+
 jobs:
   process_media:
     runs-on: ubuntu-latest
