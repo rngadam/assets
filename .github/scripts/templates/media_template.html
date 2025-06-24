@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{TITLE}}</title>
+</head>
+<body>
+  <h1>{{BASE_NAME}}</h1>
+  <figure>
+    <picture>
+      <source type="image/webp" srcset="{{WEBP_SRCSET}}">
+      <source type="image/jpeg" srcset="{{JPEG_SRCSET}}">
+      <img src="{{FALLBACK_IMG_SRC}}" alt="{{ALT_TEXT}}" style="max-width:100%; height:auto;">
+    </picture>
+  </figure>
+</body>
+</html>
