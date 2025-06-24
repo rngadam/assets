@@ -9,7 +9,16 @@ on:
     paths:
       - 'uploads/**'
       - '.github/workflows/process_media.yml'
-      - '.github/scripts/get_gemini_description.py'
+      - '.github/scripts/**' # Monitor all scripts
+
+  pull_request:
+    types: [opened, synchronize]
+    branches:
+      - 'main' # Or your default branch
+    paths:
+      - 'uploads/**'
+      - '.github/workflows/process_media.yml'
+      - '.github/scripts/**'
 
 permissions:
   contents: write

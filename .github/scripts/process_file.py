@@ -265,7 +265,7 @@ def main():
                     if (output_jpg_abs_path.parent / f"{output_jpg_abs_path.name}_original").exists():
                         (output_jpg_abs_path.parent / f"{output_jpg_abs_path.name}_original").unlink()
                     current_asset_data["outputs"]["image_files"].append({
-                        "format": "jpg", "width": width, "path": str(IMAGE_DIR.name / jpg_filename) # Store relative path
+                        "format": "jpg", "width": width, "path": str(Path(IMAGE_DIR.name) / jpg_filename) # Store path relative to BASE_OUTPUT_DIR
                     })
 
                     # WebP
@@ -282,7 +282,7 @@ def main():
                     if (output_webp_abs_path.parent / f"{output_webp_abs_path.name}_original").exists():
                         (output_webp_abs_path.parent / f"{output_webp_abs_path.name}_original").unlink()
                     current_asset_data["outputs"]["image_files"].append({
-                        "format": "webp", "width": width, "path": str(IMAGE_DIR.name / webp_filename) # Store relative path
+                        "format": "webp", "width": width, "path": str(Path(IMAGE_DIR.name) / webp_filename) # Store path relative to BASE_OUTPUT_DIR
                     })
                     log_message(f"Successfully converted to {width}w (JPG/WebP) for {current_base_name}")
 
@@ -313,7 +313,7 @@ def main():
                 raw_content_url_prefix = current_asset_data["raw_content_url_prefix"]
                 html_filename = f"{current_base_name}.html"
                 output_html_file_abs = HTML_DIR / html_filename # Absolute path for writing
-                output_html_file_rel = str(HTML_DIR.name / html_filename) # Relative path for index
+                # output_html_file_rel = str(HTML_DIR.name / html_filename) # This line caused a TypeError and was unused. Removing.
 
                 widths = [1920, 1280, 640]
                 webp_srcset_parts = []
