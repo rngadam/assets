@@ -24,6 +24,7 @@ def get_descriptions(api_key, file_path, output_dir):
         print(f"Error: File not found at {file_path}", file=sys.stderr)
         return "error-file-not-found"
 
+    sample_file = None  # Initialize sample_file to ensure it's defined in finally
     try:
         print(f"Uploading file: {file_path} to Gemini API...", file=sys.stderr)
         sample_file = genai.upload_file(path=file_path)
@@ -41,10 +42,6 @@ def get_descriptions(api_key, file_path, output_dir):
         prompt_full_desc = "Provide a full, detailed description for this media, suitable for use as an image caption or alt text. Describe the scene, subjects, colors, and any notable features."
         print("Generating full description with Gemini 1.5 Flash...", file=sys.stderr)
         response_full_desc = model.generate_content([prompt_full_desc, sample_file])
-
-        print(f"Deleting uploaded file: {sample_file.name}", file=sys.stderr)
-        genai.delete_file(sample_file.name)
-        print("Uploaded file deleted.", file=sys.stderr)
 
         concise_filename_text = "generic-media-file"
         if response_filename and response_filename.text:
@@ -89,6 +86,11 @@ def get_descriptions(api_key, file_path, output_dir):
         except Exception as e_save:
             print(f"Error saving fallback description: {e_save}", file=sys.stderr)
         return fallback_filename
+    finally:
+        if sample_file:
+            print(f"Deleting uploaded file: {sample_file.name}", file=sys.stderr)
+            genai.delete_file(sample_file.name)
+            print("Uploaded file deleted.", file=sys.stderr)
 
 
 if __name__ == "__main__":
@@ -98,13 +100,6 @@ if __name__ == "__main__":
     parser.add_argument("output_dir", help="Directory to save the .md file (e.g., processed_media/descriptions)")
     args = parser.parse_args()
 
-    # Ensure the output directory for .md files exists, relative to the script's CWD (which is repo root in Actions)
-    # The workflow will create processed_media/images, processed_media/videos.
-    # Let's make a similar top-level directory for descriptions.
-    description_output_dir = args.output_dir # This will be passed from the workflow
-
-    # The script now expects output_dir to be created by the workflow if it's specific
-    # For now, let's assume the workflow passes a valid, existing path or a path that can be created.
-
+    description_output_dir = args.output_dir
     concise_filename = get_descriptions(args.api_key, args.file_path, description_output_dir)
     print(concise_filename) # This goes to stdout and is captured by the workflow
