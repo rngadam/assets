@@ -109,33 +109,25 @@ jobs:
           git config --global user.email 'github-actions[bot]@users.noreply.github.com'
 
           echo "Staging processed files for commit..."
-          # Function to add files from a directory if it exists and is not empty
-          add_files_if_present() {
-            local dir_path="$1"
-            local pattern="$2"
-            if [ -d "$dir_path" ] && [ -n "$(ls -A "$dir_path")" ]; then
-              echo "Adding files from $dir_path with pattern $pattern"
-              git add "$dir_path/$pattern"
-            else
-              echo "No files to add from $dir_path or directory does not exist."
-            fi
-          }
+          # Stage all new, modified, and deleted files within processed_media/ and for index.json
+          git add -A processed_media/ index.json || echo "Warning: git add command encountered an issue or no files to add from processed_media or index.json."
 
-          add_files_if_present "processed_media/images" "*"
-          add_files_if_present "processed_media/videos" "*"
-          add_files_if_present "processed_media/descriptions" "*.md"
-          add_files_if_present "processed_media/html" "*.html"
-          # add_files_if_present "processed_flags" "*" # No longer needed
-
-          # Add index.json if it exists and has changes
-          if [ -f "index.json" ]; then
-            git add index.json
-          fi
+          echo "Current git status before commit:"
+          git status -s
 
           # Only commit if there are changes staged
           if ! git diff --staged --quiet; then
+            echo "Files staged for commit:"
+            git diff --staged --name-only
+
+            echo "Files staged for commit:"
+            git diff --staged --name-only
+
             echo "Committing changes..."
             git commit -m "Process media files, add descriptions, and preserve metadata"
+
+            echo "Git status after commit (before fetch/rebase):"
+            git status -s
 
             CURRENT_BRANCH_NAME="${{ github.head_ref || github.ref_name }}"
 
