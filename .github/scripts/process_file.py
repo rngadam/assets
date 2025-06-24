@@ -5,6 +5,7 @@ import hashlib
 import subprocess
 import re
 from pathlib import Path
+import html
 
 # Define constants for output directories and flag file location
 BASE_OUTPUT_DIR = Path("processed_media")
@@ -231,8 +232,8 @@ def main():
 
                 fallback_img_src = f"{raw_content_url_prefix}processed_media/images/{current_base_name}-640w.jpg"
 
-                # Escape alt text for HTML attributes
-                escaped_alt_text = full_description_content.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("\"", "&quot;").replace("'", "&apos;")
+                # Escape alt text for HTML attributes using html.escape()
+                escaped_alt_text = html.escape(full_description_content)
 
                 # Read HTML template
                 template_path = Path(__file__).parent / "templates" / "media_template.html"
@@ -252,18 +253,14 @@ def main():
                         f_html.write(html_content)
                     log_message(f"Generated HTML file: {output_html_file} from template (using raw GitHub URLs)")
                     record_step_in_flag_file(flag_file_path, STEP_HTML_GENERATION)
+                    processed_steps.add(STEP_HTML_GENERATION) # Update local set for current run
                 except FileNotFoundError:
                     log_message(f"Error: HTML template file not found at {template_path}", level="ERROR")
                 except IOError as e:
                     log_message(f"Error reading HTML template or writing HTML file {output_html_file}: {e}", level="ERROR")
-            else:
+            else: # Corresponds to: if STEP_HTML_GENERATION not in processed_steps
                 log_message(f"Skipping HTML Generation for {args.input_file} (already processed).")
-                    processed_steps.add(STEP_HTML_GENERATION)
-                except IOError as e:
-                    log_message(f"Error writing HTML file {output_html_file}: {e}", level="ERROR")
-            else:
-                log_message(f"Skipping HTML Generation for {args.input_file} (already processed).")
-        else:
+        else: # Corresponds to: if (STEP_IMAGE_CONVERSION in processed_steps or expected_image_file_check.exists())
             log_message(f"Skipping HTML Generation for {args.input_file} because image conversion step is not flagged as complete or expected image files are missing.")
 
     elif is_video:
