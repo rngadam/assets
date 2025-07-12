@@ -9,7 +9,16 @@ on:
     paths:
       - 'uploads/**'
       - '.github/workflows/process_media.yml'
-      - '.github/scripts/get_gemini_description.py'
+      - '.github/scripts/**' # Monitor all scripts
+
+  pull_request:
+    types: [opened, synchronize]
+    branches:
+      - 'main' # Or your default branch
+    paths:
+      - 'uploads/**'
+      - '.github/workflows/process_media.yml'
+      - '.github/scripts/**'
 
 permissions:
   contents: write
@@ -39,7 +48,7 @@ jobs:
           mkdir -p processed_media/videos
           mkdir -p processed_media/descriptions # For .md files
           mkdir -p processed_media/html # For .html files
-          mkdir -p processed_flags
+          # mkdir -p processed_flags # No longer needed
 
       - name: Process new media files
         id: process_files
@@ -100,29 +109,37 @@ jobs:
           git config --global user.email 'github-actions[bot]@users.noreply.github.com'
 
           echo "Staging processed files for commit..."
-          # Function to add files from a directory if it exists and is not empty
-          add_files_if_present() {
-            local dir_path="$1"
-            local pattern="$2"
-            if [ -d "$dir_path" ] && [ -n "$(ls -A "$dir_path")" ]; then
-              echo "Adding files from $dir_path with pattern $pattern"
-              git add "$dir_path/$pattern"
-            else
-              echo "No files to add from $dir_path or directory does not exist."
-            fi
-          }
+          # Stage all new, modified, and deleted files within processed_media/ and for index.json
+          git add -A processed_media/ index.json || echo "Warning: git add command encountered an issue or no files to add from processed_media or index.json."
 
-          add_files_if_present "processed_media/images" "*"
-          add_files_if_present "processed_media/videos" "*"
-          add_files_if_present "processed_media/descriptions" "*.md"
-          add_files_if_present "processed_media/html" "*.html"
-          add_files_if_present "processed_flags" "*"
+          echo "Current git status before commit:"
+          git status -s
 
           # Only commit if there are changes staged
           if ! git diff --staged --quiet; then
+            echo "Files staged for commit:"
+            git diff --staged --name-only
+
+            echo "Files staged for commit:"
+            git diff --staged --name-only
+
             echo "Committing changes..."
             git commit -m "Process media files, add descriptions, and preserve metadata"
-            git push
+
+            echo "Git status after commit (before fetch/rebase):"
+            git status -s
+
+            CURRENT_BRANCH_NAME="${{ github.head_ref || github.ref_name }}"
+
+            echo "Fetching origin..."
+            git fetch origin
+
+            echo "Rebasing local commit onto origin/$CURRENT_BRANCH_NAME..."
+            # If rebase fails (e.g. conflicts), the workflow will stop here.
+            git rebase "origin/$CURRENT_BRANCH_NAME"
+
+            echo "Pushing changes to origin HEAD:$CURRENT_BRANCH_NAME"
+            git push origin HEAD:"$CURRENT_BRANCH_NAME"
           else
             echo "No changes to commit."
           fi

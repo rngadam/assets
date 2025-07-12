@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Processed Media Catalog</title>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <style>
+        body { font-family: sans-serif; margin: 20px; background-color: #f4f4f4; color: #333; }
+        header { text-align: center; margin-bottom: 30px; }
+        #catalog { display: grid; grid-template-columns: repeat(auto-fill, minmax(350px, 1fr)); gap: 20px; }
+        .asset { background-color: #fff; border: 1px solid #ddd; border-radius: 8px; padding: 15px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        .asset h2 { margin-top: 0; font-size: 1.5em; color: #0056b3; }
+        .asset img, .asset video { max-width: 100%; height: auto; border-radius: 4px; margin-bottom: 10px; }
+        .asset .description { margin-bottom: 15px; padding: 10px; border: 1px solid #eee; border-radius: 4px; background-color: #f9f9f9; }
+        .asset .description p:last-child { margin-bottom: 0; }
+        .asset-details { font-size: 0.9em; color: #555; }
+        .asset-details strong { color: #333; }
+        .asset-details ul { padding-left: 20px; margin-top: 5px; }
+        .asset-details a { color: #007bff; text-decoration: none; }
+        .asset-details a:hover { text-decoration: underline; }
+        .loader { text-align: center; font-size: 1.2em; padding: 20px; }
+        .error-message { color: red; text-align: center; }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>Processed Media Catalog</h1>
+    </header>
+    <div id="catalog">
+        <div class="loader">Loading assets...</div>
+    </div>
+
+    <script>
+        function escapeHTML(unsafe) {
+            if (unsafe === null || typeof unsafe === 'undefined') {
+                return '';
+            }
+            return unsafe
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;")
+                .replace(/'/g, "&#039;");
+        }
+
+        async function fetchIndexAndDisplay() {
+            const catalogDiv = document.getElementById('catalog');
+            try {
+                const response = await fetch('index.json?t=' + new Date().getTime()); // Cache buster
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                const assets = await response.json();
+
+                catalogDiv.innerHTML = ''; // Clear loader
+
+                if (!assets || assets.length === 0) {
+                    catalogDiv.innerHTML = '<p>No assets found in index.json.</p>';
+                    return;
+                }
+
+                assets.forEach(asset => {
+                    const assetDiv = document.createElement('div');
+                    assetDiv.className = 'asset';
+
+                    let mediaHTML = '';
+                    const rawPrefix = asset.raw_content_url_prefix || ''; // Use stored prefix
+                    const processedMediaBase = rawPrefix + 'processed_media/';
+
+
+                    if (asset.outputs.type === 'image') {
+                        const webpSources = asset.outputs.image_files
+                            .filter(f => f.format === 'webp')
+                            .map(f => `${processedMediaBase}${f.path} ${f.width}w`)
+                            .join(', ');
+                        const jpgSources = asset.outputs.image_files
+                            .filter(f => f.format === 'jpg')
+                            .map(f => `${processedMediaBase}${f.path} ${f.width}w`)
+                            .join(', ');
+
+                        let fallbackSrc = '';
+                        const fallbackJpg = asset.outputs.image_files.find(f => f.format === 'jpg' && f.width === 640);
+                        if (fallbackJpg) {
+                            fallbackSrc = `${processedMediaBase}${fallbackJpg.path}`;
+                        } else {
+                            // If 640w JPG is not found, use the smallest JPG available as fallback
+                            const smallestJpg = asset.outputs.image_files
+                                .filter(f => f.format === 'jpg')
+                                .sort((a, b) => a.width - b.width)[0];
+                            if (smallestJpg) {
+                                fallbackSrc = `${processedMediaBase}${smallestJpg.path}`;
+                            }
+                        }
+
+                        mediaHTML = `
+                            <picture>
+                                ${webpSources ? `<source srcset="${webpSources}" type="image/webp">` : ''}
+                                ${jpgSources ? `<source srcset="${jpgSources}" type="image/jpeg">` : ''}
+                                ${fallbackSrc ? `<img src="${fallbackSrc}" alt="${escapeHTML(asset.base_name || 'Processed Image')}">` : '<p>Image not available</p>'}
+                            </picture>
+                        `;
+                    } else if (asset.outputs.type === 'video') {
+                        const mp4Source = asset.outputs.video_files.find(f => f.format === 'mp4');
+                        const webmSource = asset.outputs.video_files.find(f => f.format === 'webm');
+                        mediaHTML = `
+                            <video controls preload="metadata" style="width:100%;">
+                                ${webmSource ? `<source src="${processedMediaBase}${webmSource.path}" type="video/webm">` : ''}
+                                ${mp4Source ? `<source src="${processedMediaBase}${mp4Source.path}" type="video/mp4">` : ''}
+                                Your browser does not support the video tag.
+                            </video>
+                        `;
+                    }
+
+                    let descriptionRenderedHtml = '<p>No description available.</p>';
+                    if (asset.description_markdown_path) {
+                        // Placeholder for description, will be filled by the fetch call after assetDiv is in DOM
+                        descriptionRenderedHtml = '<div class="description-loading">Loading description...</div>';
+                    }
+
+                    assetDiv.innerHTML = `
+                        <h2>${escapeHTML(asset.base_name || 'Untitled Asset')}</h2>
+                        ${mediaHTML}
+                        <div class="description">
+                            ${descriptionRenderedHtml}
+                        </div>
+                        <div class="asset-details">
+                            <p><strong>Source File:</strong> ${escapeHTML(asset.source_file_path)}</p>
+                            <p><strong>Source Hash:</strong> ${escapeHTML(asset.source_hash)}</p>
+                            ${asset.outputs.html_page_path ? `<p><strong>HTML Page:</strong> <a href="${rawPrefix}${asset.outputs.html_page_path}" target="_blank">${escapeHTML(asset.outputs.html_page_path.replace('processed_media/', ''))}</a></p>` : ''}
+                            <p><strong>Processed Steps:</strong></p>
+                            <ul>
+                                ${asset.processed_steps && asset.processed_steps.length > 0 ? asset.processed_steps.map(step => `<li>${escapeHTML(step)}</li>`).join('') : '<li>None</li>'}
+                            </ul>
+                        </div>
+                    `;
+                    catalogDiv.appendChild(assetDiv);
+
+                    // Fetch and render markdown if path exists (if not done inline already)
+                    if (asset.description_markdown_path && assetDiv.querySelector('.description-loading')) {
+                         fetch(`${rawPrefix}${asset.description_markdown_path}?t=${new Date().getTime()}`)
+                            .then(response => {
+                                if (!response.ok) throw new Error(`Failed to fetch markdown: ${response.statusText}`);
+                                return response.text();
+                            })
+                            .then(md => {
+                                const descDiv = assetDiv.querySelector('.description');
+                                if (descDiv) { // Check if div still exists
+                                    if (md && (md.trim() !== "") && !md.toLowerCase().includes("<!doctype html>")) {
+                                        descDiv.innerHTML = marked.parse(md);
+                                    } else if (md.trim() === "") {
+                                        descDiv.innerHTML = "<p>Description is empty.</p>";
+                                    } else {
+                                        descDiv.innerHTML = "<p>Could not load or parse description (unexpected content).</p>";
+                                    }
+                                }
+                            })
+                            .catch(err => {
+                                console.error('Error fetching or parsing markdown:', asset.description_markdown_path, err);
+                                const descDiv = assetDiv.querySelector('.description');
+                                if (descDiv) {
+                                   descDiv.innerHTML = '<p>Error loading description.</p>';
+                                }
+                            });
+                    }
+                });
+
+            } catch (error) {
+                console.error('Failed to load or process index.json:', error);
+                catalogDiv.innerHTML = `<div class="error-message">Error loading asset catalog: ${error.message}</div>`;
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', fetchIndexAndDisplay);
+    </script>
+</body>
+</html>
