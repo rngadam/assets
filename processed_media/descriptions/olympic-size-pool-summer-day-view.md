@@ -1,0 +1,3 @@
+Here's a caption/alt text describing the image:
+
+A sunny outdoor scene features a large, bright blue Olympic-sized swimming pool, with multiple lanes marked by dark lines. The pool reflects the sky and surrounding buildings.  Behind the pool is a long, low brick building with a green roof, featuring two prominent square towers.  A group of people are gathered around the pool deck, suggesting a busy, likely public, recreational area.  The background shows a partially visible large geodesic dome, under a partly cloudy sky. The overall colors are vibrant; the blues of the pool and sky contrast with the reddish-brown of the buildings and the greens of the trees in the background. The scene suggests a summer day at a public pool, possibly near a park or similar venue.
